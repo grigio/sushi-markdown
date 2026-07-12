@@ -1,23 +1,28 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * sushi-markdown: a Markdown renderer for the GNOME Files previewer (sushi 51+).
+ * sushi-markdown (sushi 50): a Markdown renderer for the GNOME Files previewer.
  *
- * Drop this single file into ~/.local/share/sushi/plugins-1/. The previewer
- * imports every file in that directory, so nothing else may live beside it.
+ * Drop this single file into ~/.local/share/sushi/viewers/. Markdown is
+ * converted to HTML by the first available command-line converter (cmark-gfm,
+ * cmark, pandoc, or python -m markdown) and shown in a WebKit2 view.
  *
- * Markdown is converted to HTML by the first available command-line converter
- * (cmark-gfm, cmark, pandoc, or python -m markdown) and shown in a WebKit view.
+ * This is the sushi 50 (GTK3) variant: legacy gjs imports, WebKit2GTK 4.1,
+ * imports.ui.renderer. For sushi 51+ use the sushi-51 branch.
  */
 
-import Adw from 'gi://Adw';
-import Gdk from 'gi://Gdk';
-import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
-import GObject from 'gi://GObject';
-import WebKit from 'gi://WebKit?version=6.0';
+const {Gio, GLib, GObject, Gtk} = imports.gi;
 
-import {Renderer, ResizePolicy} from 'resource:///org/gnome/NautilusPreviewer/js/core/renderer.js';
+var WebKit2;
+try {
+    imports.gi.versions.WebKit2 = '4.1';
+    WebKit2 = imports.gi.WebKit2;
+} catch (e) {
+}
 
-export const mimeTypes = ['text/markdown', 'text/x-markdown'];
+function _isAvailable() {
+    return WebKit2 !== undefined;
+}
+
+const Renderer = imports.ui.renderer;
 
 const CONVERTERS = [
     ['cmark-gfm', p => ['cmark-gfm', '--unsafe', '-e', 'table', '-e', 'strikethrough', '-e', 'autolink', p]],
@@ -27,30 +32,24 @@ const CONVERTERS = [
 ];
 
 function toHtml(path) {
-    for (const [bin, argv] of CONVERTERS) {
+    for (let [bin, argv] of CONVERTERS) {
         if (!GLib.find_program_in_path(bin))
             continue;
         try {
-            const proc = Gio.Subprocess.new(argv(path),
+            let proc = Gio.Subprocess.new(argv(path),
                 Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE);
-            const [, stdout] = proc.communicate_utf8(null, null);
+            let [, stdout] = proc.communicate_utf8(null, null);
             if (proc.get_successful() && stdout)
                 return stdout;
-        } catch {
+        } catch (e) {
             // converter missing or failed; try the next one
         }
     }
     return null;
 }
 
-function rgba(hex) {
-    const c = new Gdk.RGBA();
-    c.parse(hex);
-    return c;
-}
-
 function page(body, dark) {
-    const c = dark
+    let c = dark
         ? {fg: '#e6edf3', bg: '#0d1117', muted: '#8b949e', border: '#30363d', codebg: '#161b22', link: '#4493f8'}
         : {fg: '#1f2328', bg: '#ffffff', muted: '#59636e', border: '#d1d9e0', codebg: '#f4f6f8', link: '#0969da'};
     return `<!doctype html><html><head><meta charset="utf-8">
@@ -76,46 +75,59 @@ function page(body, dark) {
 </style></head><body>${body}</body></html>`;
 }
 
-export const Klass = class MarkdownRenderer extends Adw.Bin {
-    static {
-        GObject.registerClass({Implements: [Renderer]}, this);
+var Klass = _isAvailable() ? GObject.registerClass({
+    Implements: [Renderer.Renderer],
+    Properties: {
+        fullscreen: GObject.ParamSpec.boolean('fullscreen', '', '',
+            GObject.ParamFlags.READABLE, false),
+        ready: GObject.ParamSpec.boolean('ready', '', '',
+            GObject.ParamFlags.READABLE, false),
+    },
+}, class MarkdownRenderer extends WebKit2.WebView {
+    get ready() {
+        return !!this._ready;
     }
 
-    constructor(file, _fileInfo, constructProperties = {}) {
-        super(constructProperties);
-        this._policy = ResizePolicy.MAX_SIZE;
+    get fullscreen() {
+        return !!this._fullscreen;
+    }
 
-        const path = file.get_path();
-        const html = path ? toHtml(path) : null;
+    get moveOnClick() {
+        return false;
+    }
+
+    _init(file) {
+        super._init();
+        this.connect('context-menu', () => true);
+
+        let path = file.get_path();
+        let html = path ? toHtml(path) : null;
+        let settings = Gtk.Settings.get_default();
+        let dark = settings && settings.gtk_application_prefer_dark_theme;
 
         if (html === null) {
-            this._policy = ResizePolicy.STATUS_PAGE;
-            this.set_child(new Adw.StatusPage({
-                icon_name: 'text-x-generic-symbolic',
-                title: 'No Markdown converter',
-                description: 'Install cmark, pandoc, or python-markdown to preview Markdown.',
-            }));
-            this.isReady();
-            return;
+            this.load_html(page(
+                '<p style="color:#8b949e">Install cmark, pandoc, or python-markdown ' +
+                'to preview Markdown.</p>', dark), null);
+        } else {
+            let parent = file.get_parent();
+            this.load_html(page(html, dark), parent ? `${parent.get_uri()}/` : null);
         }
 
-        const dark = Adw.StyleManager.get_default().get_dark();
-        const view = new WebKit.WebView();
-        view.set_background_color(rgba(dark ? '#0d1117' : '#ffffff'));
-        const parent = file.get_parent();
-        view.load_html(page(html, dark), parent ? `${parent.get_uri()}/` : null);
-        view.connect('load-changed', (_v, ev) => {
-            if (ev === WebKit.LoadEvent.FINISHED)
-                this.isReady();
+        this.connect('load-failed', (_view, _loadEvent, _uri, error) => {
+            this.emit('error', error);
         });
-        this.set_child(view);
+        this.isReady();
     }
 
-    get resizePolicy() {
-        return this._policy;
+    static {
+        WebKit2.WebContext.get_default().set_sandbox_enabled(true);
     }
+}) : undefined;
 
-    get topBarStyle() {
-        return Adw.ToolbarStyle.FLAT;
-    }
-};
+var mimeTypes = [];
+if (_isAvailable())
+    mimeTypes = [
+        'text/markdown',
+        'text/x-markdown',
+    ];

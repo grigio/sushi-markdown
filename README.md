@@ -20,10 +20,12 @@ cp markdown.js ~/.local/share/sushi/plugins-1/
 Nothing else may go in that directory: sushi imports every file there, so a
 stray file breaks plugin loading.
 
-Install a converter if you don't have one (`cmark` gives the best output):
+Install a converter if you don't have one. For full GitHub Markdown (tables,
+strikethrough) use `cmark-gfm`, `pandoc`, or `python-markdown`; plain `cmark`
+works but omits tables:
 
 ```
-sudo pacman -S cmark        # or pandoc, or python-markdown
+sudo pacman -S python-markdown     # or pandoc; cmark-gfm is on the AUR
 ```
 
 No restart or setting is needed. The next preview of a Markdown file uses it.

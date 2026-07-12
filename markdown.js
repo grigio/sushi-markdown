@@ -24,11 +24,12 @@ function _isAvailable() {
 
 const Renderer = imports.ui.renderer;
 
+// GFM-capable converters first; plain cmark last (it lacks tables/strikethrough).
 const CONVERTERS = [
     ['cmark-gfm', p => ['cmark-gfm', '--unsafe', '-e', 'table', '-e', 'strikethrough', '-e', 'autolink', p]],
-    ['cmark',     p => ['cmark', p]],
     ['pandoc',    p => ['pandoc', '-f', 'gfm', '-t', 'html', p]],
     ['python3',   p => ['python3', '-m', 'markdown', '-x', 'extra', '-x', 'codehilite', '-x', 'sane_lists', p]],
+    ['cmark',     p => ['cmark', p]],
 ];
 
 function toHtml(path) {

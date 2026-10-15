@@ -45,9 +45,11 @@ jobs:
           mkdir -p dist
           cp *.pkg.tar.zst dist/
           # pacman repo database, so the release can be used as a [sushi-markdown] repo
+          # repo-add creates the .db -> .db.tar.gz symlink; make it a real file for upload
           repo-add dist/sushi-markdown.db.tar.gz dist/*.pkg.tar.zst
-          cp dist/sushi-markdown.db.tar.gz dist/sushi-markdown.db
-          ls -l dist/
+          rm -f dist/sushi-markdown.db
+          cp --remove-destination dist/sushi-markdown.db.tar.gz dist/sushi-markdown.db
+          ls -lL dist/
 
       - uses: actions/upload-artifact@v4
         with:

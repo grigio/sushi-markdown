@@ -17,7 +17,7 @@ import WebKit from 'gi://WebKit?version=6.0';
 
 import {Renderer, ResizePolicy} from 'resource:///org/gnome/NautilusPreviewer/js/core/renderer.js';
 
-export const mimeTypes = ['text/markdown', 'text/x-markdown'];
+export const contentTypes = ['text/markdown', 'text/x-markdown'];
 
 // GFM-capable converters first; plain cmark last (it lacks tables/strikethrough).
 const CONVERTERS = [
@@ -96,7 +96,7 @@ export const Klass = class MarkdownRenderer extends Adw.Bin {
                 title: 'No Markdown converter',
                 description: 'Install cmark, pandoc, or python-markdown to preview Markdown.',
             }));
-            this.isReady();
+            this.markReady();
             return;
         }
 
@@ -107,7 +107,7 @@ export const Klass = class MarkdownRenderer extends Adw.Bin {
         view.load_html(page(html, dark), parent ? `${parent.get_uri()}/` : null);
         view.connect('load-changed', (_v, ev) => {
             if (ev === WebKit.LoadEvent.FINISHED)
-                this.isReady();
+                this.markReady();
         });
         this.set_child(view);
     }

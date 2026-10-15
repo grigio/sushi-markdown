@@ -22,9 +22,9 @@ Every push builds a package with GitHub Actions; tags attach it to a release.
 
 ```sh
 # one-shot install of the latest release
-curl -s https://api.github.com/repos/grigio/sushi-markdown/releases/latest \
-  | grep -o 'https://[^"]*any\.pkg\.tar\.zst' \
-  | xargs sudo pacman -U --noconfirm -
+url=$(curl -s https://api.github.com/repos/grigio/sushi-markdown/releases/latest \
+  | grep -o 'https://[^" ]*any\.pkg\.tar\.zst' | head -1)
+curl -LO "$url" && sudo pacman -U --noconfirm "$(basename "$url")"
 ```
 
 Or add it as a rolling pacman repo (the release doubles as a repo):
